@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"fmt"
 	"github.com/hashicorp/packer/packer"
+	"io"
 )
 
 func testConfig() map[string]interface{} {
@@ -115,6 +117,62 @@ func TestProvisionerPrepare_PlaybookFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
+}
+
+func expectPlaybookUploaded(playbook string) func(e *expectation, dst string, _ io.Reader, _ *os.FileInfo) error {
+	return func(e *expectation, dst string, _ io.Reader, _ *os.FileInfo) error {
+		if strings.HasSuffix(dst, playbook) {
+			e.markSatisfied()
+		}
+		return nil
+	}
+}
+
+func expectPlaybookExecuted(playbook string) func(e *expectation, cmd *packer.RemoteCmd) error {
+	return func(e *expectation, cmd *packer.RemoteCmd) error {
+		if strings.Contains(cmd.Command, playbook) {
+			e.markSatisfied()
+		}
+		return nil
+	}
+}
+
+func TestProvisionerProvision_PlaybookFiles(t *testing.T) {
+	var p Provisioner
+	config := testConfig()
+
+	playbook1, err := ioutil.TempFile("", "playbook")
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer os.Remove(playbook1.Name())
+
+	playbook2, err := ioutil.TempFile("", "playbook")
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer os.Remove(playbook2.Name())
+
+	config["playbook_files"] = []string{playbook1.Name(), playbook2.Name()}
+	err = p.Prepare(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	comm := &communicatorMock{}
+	comm.expectUpload(
+		fmt.Sprintf("Playbook %s uploaded", playbook1.Name()), expectPlaybookUploaded(playbook1.Name()),
+	)
+	comm.expectUpload(
+		fmt.Sprintf("Playbook %s uploaded", playbook2.Name()), expectPlaybookUploaded(playbook2.Name()),
+	)
+	comm.expectStart(
+		fmt.Sprintf("Playbook %s started", playbook1.Name()), expectPlaybookExecuted(playbook1.Name()),
+	)
+	if err := p.Provision(&uiStub{}, comm); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	comm.verify()
 }
 
 func TestProvisionerPrepare_InventoryFile(t *testing.T) {
