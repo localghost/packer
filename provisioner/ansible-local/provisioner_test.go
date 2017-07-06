@@ -165,12 +165,13 @@ func assertPlaybooksExecuted(comm *communicatorMock, playbooks []string) {
 	}
 }
 
-func assertPlaybooksUploaded(comm *communicatorMock, playbooks []string) {
+func assertPlaybooksUploaded(comm *communicatorMock, playbooks []string, t *testing.T) {
 	uploadIndex := 0
 	for _, playbook := range playbooks {
 		playbook = filepath.ToSlash(playbook)
 		for ; uploadIndex < len(comm.uploadDestination); uploadIndex++ {
 			dest := comm.uploadDestination[uploadIndex]
+			t.Log(dest)
 			if strings.HasSuffix(dest, playbook) {
 				break
 			}
@@ -199,7 +200,7 @@ func TestProvisionerProvision_PlaybookFiles(t *testing.T) {
 		t.Fatalf("err: %s", err)
 	}
 
-	assertPlaybooksUploaded(comm, playbooks)
+	assertPlaybooksUploaded(comm, playbooks, t)
 	assertPlaybooksExecuted(comm, playbooks)
 }
 
